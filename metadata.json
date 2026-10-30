@@ -1,0 +1,6 @@
+{
+  "name": "HPP-Pro Master",
+  "description": "Kalkulator HPP, RAB, dan Simulasi Margin Cerdas untuk UMKM, Kontraktor & Profesional dengan Konsultan AI terintegrasi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
