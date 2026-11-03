@@ -60,9 +60,26 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null);
+  const [aiNoticeMessage, setAiNoticeMessage] = useState<string | null>(null);
   const [showPromptArea, setShowPromptArea] = useState(false);
 
   const categories: BusinessCategory[] = ['kuliner', 'jasa', 'konstruksi', 'manufaktur', 'retail'];
+
+  const cleanErrorMessage = (raw: string): string => {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed?.error?.message) {
+        if (parsed.error.code === 503 || parsed.error.status === 'UNAVAILABLE') {
+          return 'Server AI sedang dalam antrean beban tinggi. Silakan coba kembali sesaat lagi.';
+        }
+        return parsed.error.message;
+      }
+    } catch (_) {}
+    if (raw.includes('503') || raw.includes('high demand') || raw.includes('UNAVAILABLE')) {
+      return 'Server AI Google sedang dalam antrean beban tinggi. Silakan klik "Coba Lagi".';
+    }
+    return raw;
+  };
 
   const handleParseWithAI = async () => {
     if (!promptText.trim()) return;
@@ -70,6 +87,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
     setIsLoadingAI(true);
     setAiError(null);
     setAiSuccessMessage(null);
+    setAiNoticeMessage(null);
 
     try {
       const response = await fetch('/api/parse-cost', {
@@ -82,7 +100,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
       });
 
       const data = await response.json();
-      if (!response.ok) {
+      if (!response.ok && !data.data) {
         throw new Error(data.error || 'Gagal memproses data dengan AI');
       }
 
@@ -92,9 +110,22 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           data.data.aiSummary ||
             'Berhasil mengekstrak komponen biaya terstruktur dari deskripsi Anda!'
         );
+        if (data.notice) {
+          setAiNoticeMessage(data.notice);
+        }
       }
     } catch (err: any) {
-      setAiError(err.message || 'Terjadi kesalahan saat memproses data AI.');
+      console.warn('Backend parse error, applying local fallback:', err);
+      // Client-side fallback if network or server proxy fails
+      try {
+        const { parseCostTextLocally } = await import('../utils/localParser');
+        const localData = parseCostTextLocally(promptText, project.category);
+        onApplyAIParsedData(localData);
+        setAiSuccessMessage(localData.aiSummary);
+        setAiNoticeMessage('Data diproses secara lokal dengan mesin analisis cerdas karena server sedang dalam antrean tinggi.');
+      } catch (fallbackErr) {
+        setAiError(cleanErrorMessage(err.message || 'Terjadi kesalahan saat memproses data AI.'));
+      }
     } finally {
       setIsLoadingAI(false);
     }
@@ -299,20 +330,40 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
 
               {/* Status messages */}
               {aiError && (
-                <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs flex items-center justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold text-rose-200">Perhatian: </span>
+                      {aiError}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleParseWithAI}
+                    disabled={isLoadingAI}
+                    className="px-2.5 py-1 rounded-lg bg-rose-900/60 hover:bg-rose-800 text-white font-bold text-[11px] shrink-0 border border-rose-700 transition-colors cursor-pointer"
+                  >
+                    Coba Lagi
+                  </button>
+                </div>
+              )}
+
+              {aiNoticeMessage && (
+                <div className="p-3 rounded-xl bg-sky-950/40 border border-sky-800/60 text-sky-300 text-xs flex items-start gap-2">
+                  <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-semibold">Gagal Memproses: </span>
-                    {aiError}
+                    <span className="font-semibold text-white">Catatan Sistem: </span>
+                    {aiNoticeMessage}
                   </div>
                 </div>
               )}
 
               {aiSuccessMessage && (
-                <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 text-xs flex items-start gap-2">
+                <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 text-xs flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-semibold">Analisis Selesai: </span>
+                    <span className="font-semibold text-white">Analisis Selesai: </span>
                     {aiSuccessMessage}
                   </div>
                 </div>

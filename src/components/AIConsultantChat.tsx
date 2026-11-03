@@ -137,7 +137,15 @@ Ada yang ingin didiskusikan untuk optimasi biaya atau strategi penetapan harga?`
 
       setMessages((prev) => [...prev, botMsg]);
     } catch (err: any) {
-      setError(err.message || 'Terjadi kesalahan pada layanan AI.');
+      let cleanMsg = err?.message || 'Terjadi kesalahan pada layanan AI.';
+      try {
+        const parsed = JSON.parse(cleanMsg);
+        if (parsed?.error?.message) cleanMsg = parsed.error.message;
+      } catch (_) {}
+      if (cleanMsg.includes('503') || cleanMsg.includes('high demand') || cleanMsg.includes('UNAVAILABLE')) {
+        cleanMsg = 'Server AI sedang dalam lonjakan trafik tinggi. Sistem telah menyiapkan jawaban analisa cadangan, silakan coba kirim ulang sesaat lagi.';
+      }
+      setError(cleanMsg);
     } finally {
       setIsLoading(false);
     }
